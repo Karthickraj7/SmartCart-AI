@@ -1,0 +1,50 @@
+name: CI
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_DB: shop, POSTGRES_USER: shop, POSTGRES_PASSWORD: shop }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U shop" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://shop:shop@localhost:5432/shop
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements.txt }
+      - run: pip install -r requirements.txt
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python -m pytest -q
+  backend-sqlite:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: backend/requirements.txt }
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+  web:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { app: [frontend, admin] } }
+    defaults: { run: { working-directory: "${{ matrix.app }}" } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: "${{ matrix.app }}/package-lock.json" }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  deploy:
+    needs: [backend, backend-sqlite, web]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # Render and Vercel deploy from GitHub on push to main once connected. Add a deploy-hook call here for explicit triggers.
+      - run: echo "Checks passed; Render/Vercel deploy from main automatically."

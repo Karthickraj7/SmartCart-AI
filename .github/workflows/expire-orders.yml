@@ -1,0 +1,15 @@
+name: Expire unpaid orders
+on:
+  schedule: [{ cron: "*/30 * * * *" }]
+  workflow_dispatch: {}
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    # Requires repo secrets DATABASE_URL and SECRET_KEY. Secrets are masked in logs.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r backend/requirements.txt
+      - run: python backend/manage.py expire_pending_orders --minutes 30
+        env: { DATABASE_URL: "${{ secrets.DATABASE_URL }}", SECRET_KEY: "${{ secrets.SECRET_KEY }}" }
